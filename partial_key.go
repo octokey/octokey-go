@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+// A PartialKey is a triple (E, N, D) where E is the public exponent,
+// N is the modulus, and D is a part of the mRSA private key.
 type PartialKey mrsa.PrivateKey
 
 const (
@@ -27,6 +29,8 @@ var (
 	ErrPartialKeyWrongExponent = errors.New("octokey/partial_key: invalid exponent")
 )
 
+// GeneratePartialKey generates two new PartialKeys that can be used
+// together to perform mRSA operations.
 func GeneratePartialKey() (*PartialKey, *PartialKey, error) {
 
 	k, err := rsa.GenerateKey(rand.Reader, BIT_LENGTH)
@@ -44,6 +48,7 @@ func GeneratePartialKey() (*PartialKey, *PartialKey, error) {
 	return (*PartialKey)(d1), (*PartialKey)(d2), nil
 }
 
+// NewPartialKey reads a PartialKey from its string representation
 func NewPartialKey(text string) (*PartialKey, error) {
 
 	text = strings.TrimSpace(text)
@@ -98,11 +103,8 @@ func NewPartialKey(text string) (*PartialKey, error) {
 	return k, nil
 }
 
-// Sign runs partial mRSA decryption on a number. You will need to finalize the
+// PartialDecrypt runs partial mRSA decryption on a number. You will need to finalize the
 // signature once you have run Sign with all parts of the key.
-func (k *PartialKey) Sign(m *big.Int) (*big.Int, error) {
-	return k.PartialDecrypt(m)
-}
 func (k *PartialKey) PartialDecrypt(c *big.Int) (*big.Int, error) {
 	mrsaKey := mrsa.PrivateKey(*k)
 	return mrsaKey.PartialDecrypt(c)
@@ -111,7 +113,8 @@ func (k *PartialKey) PartialDecrypt(c *big.Int) (*big.Int, error) {
 // Format gives you the partial key in the canonical representation including
 // ----BEGIN/END headers.
 func (k *PartialKey) String() string {
-	b := k.Buffer()
+	b := new(buffer.Buffer)
+	k.WriteBuffer(b)
 	if b.Error != nil {
 		panic(errors.New("invalid partial key: " + b.Error.Error()))
 	}
@@ -142,14 +145,10 @@ func lineWrap(s string, w int) string {
 
 	return string(b.Bytes())
 }
-
-func (k *PartialKey) Buffer() *buffer.Buffer {
-	b := new(buffer.Buffer)
-
+// WriteBuffer writes the PartialKey to a buffer
+func (k *PartialKey) WriteBuffer(b *buffer.Buffer) {
 	b.AddString(KEY_TYPE)
 	b.AddMPInt(big.NewInt(int64(k.E)))
 	b.AddMPInt(k.N)
 	b.AddMPInt(k.D)
-
-	return b
 }

@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+// A SignRequest represents a request to perform a partial mRSA sign, and also
+// the result of that computation.  It is represented as a Buffer of
+// ("ssh-rsa" // || E || N || M) where E is the public exponent (MPint 65537)
+// N is the modulus (a 2048 bit MPint), and M is the message (a 2048 bit MPInt
+// strictly less than N)
 type SignRequest struct {
 	Key *PublicKey
 	M   *big.Int
@@ -21,6 +26,7 @@ var (
 	ErrSignRequestFormat = errors.New("escrow/signing_request: invalid format")
 )
 
+// NewSignRequest reads a sign request from a string.
 func NewSignRequest(text string) (*SignRequest, error) {
 
 	text = strings.TrimSpace(text)
@@ -42,31 +48,46 @@ func NewSignRequest(text string) (*SignRequest, error) {
 
 	base64 := split[len(split)-1]
 
-	buff := buffer.NewBuffer(base64)
-
-	publicKey := new(PublicKey)
-	err := publicKey.ReadBuffer(buff)
+	b := buffer.NewBuffer(base64)
+	request := new(SignRequest)
+	err := request.ReadBuffer(b)
 	if err != nil {
 		return nil, err
 	}
+	b.ScanEof()
 
-	msg := buff.ScanMPInt()
-	buff.ScanEof()
-
-	if buff.Error != nil {
-		return nil, buff.Error
+	if b.Error != nil {
+		return nil, b.Error
 	}
-
-	request := new(SignRequest)
-	request.Key = publicKey
-	request.M = msg
 
 	return request, nil
 }
 
+// ReadBuffer reads a SignRequest from a buffer.
+func (request *SignRequest) ReadBuffer(b *buffer.Buffer) error {
+
+	publicKey := new(PublicKey)
+	err := publicKey.ReadBuffer(b)
+	if err != nil {
+		return err
+	}
+
+	msg := b.ScanMPInt()
+
+	if msg.Cmp(publicKey.N) >= 0 {
+		return errors.New("cannot sign message > N")
+	}
+
+	request.Key = publicKey
+	request.M = msg
+
+	return nil
+}
+
+// Sign partially signs the request with the given key.
 func (request *SignRequest) Sign(key *PartialKey) error {
 
-	m, err := key.Sign(request.M)
+	m, err := key.PartialDecrypt(request.M)
 
 	if err != nil {
 		return err
@@ -77,6 +98,8 @@ func (request *SignRequest) Sign(key *PartialKey) error {
 	return nil
 }
 
+// String produces the line-wrapped base-64 version of the challenge,
+// suitable for being passed to NewSignRequest()
 func (request *SignRequest) String() string {
 	b := new(buffer.Buffer)
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+// A PublicKey is a pair of E (the public exponent) and N (the modulus)
+// of an mRSA keypair.
 type PublicKey mrsa.PublicKey
 
 const PUBLIC_KEY_TYPE = "ssh-rsa"
@@ -17,6 +19,7 @@ var (
 	ErrPublicKeyFormat = errors.New("octokey/public_key: invalid input")
 )
 
+// NewPublicKey reads the public key from a string.
 func NewPublicKey(text string) (*PublicKey, error) {
 
 	text = strings.TrimSpace(text)
@@ -44,12 +47,14 @@ func NewPublicKey(text string) (*PublicKey, error) {
 	return k, nil
 }
 
+// WriteBuffer writes the public key to a buffer.
 func (p *PublicKey) WriteBuffer(b *buffer.Buffer) {
 	b.AddString(PUBLIC_KEY_TYPE)
 	b.AddMPInt(big.NewInt(int64(p.E)))
 	b.AddMPInt(p.N)
 }
 
+// ReadBuffer reads the public key from a buffer.
 func (p *PublicKey) ReadBuffer(b *buffer.Buffer) error {
 
 	t := b.ScanString()
@@ -70,6 +75,7 @@ func (p *PublicKey) ReadBuffer(b *buffer.Buffer) error {
 	return nil
 }
 
+// String returns the public key in the same format as used by ssh
 func (p *PublicKey) String() string {
 	b := new(buffer.Buffer)
 
